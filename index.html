@@ -376,9 +376,21 @@
 
   async function startRecording() {
     // Pedir permiso micrófono
+    // IMPORTANTE: desactivar el procesado de voz (echoCancellation, noiseSuppression,
+    // autoGainControl). Por defecto el navegador los activa para llamadas/voz, y eso
+    // destruye las frecuencias necesarias para identificar música (filtra graves/agudos,
+    // comprime dinámica). Sin esto, ACRCloud recibe una señal degradada y falla mucho más.
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1,
+          sampleRate: 44100
+        }
+      });
     } catch (e) {
       showError('Necesito permiso al micrófono. Ve a Ajustes → Telegram → Micrófono.');
       return;
@@ -394,7 +406,10 @@
         ? 'audio/mp4'
         : 'audio/webm';
 
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    // audioBitsPerSecond alto: por defecto el navegador suele grabar a 24-32kbps
+    // (pensado para voz/llamadas), lo que degrada demasiado el audio musical para
+    // que ACRCloud pueda huella-identificarlo. 128kbps da mucho mejor resultado.
+    mediaRecorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128000 });
     mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.onstop = () => { stream.getTracks().forEach(t => t.stop()); sendAudio(); };
     mediaRecorder.start(250);
